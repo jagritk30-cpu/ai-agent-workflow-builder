@@ -1,0 +1,154 @@
+table:
+  name: workflow_steps
+  schema: public
+object_relationships:
+  - name: workflow
+    using:
+      foreign_key_constraint_on: workflow_id
+array_relationships:
+  - name: step_runs
+    using:
+      foreign_key_constraint_on:
+        column: workflow_step_id
+        table:
+          name: step_runs
+          schema: public
+select_permissions:
+  - role: owner
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+      columns: "*"
+  - role: editor
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+      columns: "*"
+  - role: viewer
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+      columns: "*"
+insert_permissions:
+  - role: owner
+    permission:
+      check:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $body.workflow.org_id
+              - role:
+                  _in:
+                    - owner
+      columns: "*"
+  - role: editor
+    permission:
+      check:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $body.workflow.org_id
+      columns: "*"
+update_permissions:
+  - role: owner
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+              - role:
+                  _in:
+                    - owner
+      check: {}
+      columns: "*"
+  - role: editor
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+      check: {}
+      columns: "*"
+delete_permissions:
+  - role: owner
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id
+              - role:
+                  _in:
+                    - owner
+  - role: editor
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: org_members
+            schema: public
+          _where:
+            _and:
+              - user_id:
+                  _eq: X-Hasura-User-Id
+              - org_id:
+                  _eq: $table.workflow.org_id

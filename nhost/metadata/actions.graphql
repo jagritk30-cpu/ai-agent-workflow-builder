@@ -1,0 +1,34 @@
+type Mutation {
+  triggerWorkflowRun(
+    workflow_id: uuid!
+  ): WorkflowRunResult
+}
+
+type Mutation {
+  approveStep(
+    step_run_id: uuid!
+  ): ApprovalResult
+}
+
+type Mutation {
+  webhookTrigger(
+    workflow_id: uuid!
+    token: String!
+    payload: jsonb
+  ): WebhookResult
+}
+
+type WorkflowRunResult {
+  run_id: uuid!
+  status: String!
+}
+
+type ApprovalResult {
+  success: Boolean!
+  message: String
+}
+
+type WebhookResult {
+  success: Boolean!
+  run_id: uuid
+}
