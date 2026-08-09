@@ -15,10 +15,10 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   return (
-    <OrgContext.Provider value={{ orgId, members: [], usage: { quota_used: 150, quota_limit: 1000 } }}>
+    <OrgContext.Provider value={{ currentOrg: { id: orgId, quota_used: 150, quota_limit: 1000 }, members: [] }}>
       {children}
     </OrgContext.Provider>
   );
 }
 
-export const useOrg = () => useContext(OrgContext);
+export const useOrgContext = () => useContext(OrgContext);
