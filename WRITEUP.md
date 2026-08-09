@@ -1,143 +1,37 @@
-# Technical Write-Up: AI Agent Workflow Builder
+# AI Agent Workflow Builder: Architectural Write-up
 
-## Schema Design Reasoning
+This document outlines the core architectural decisions, data model reasoning, and security enforcement mechanisms that power the AI Agent Workflow Builder.
 
-The schema follows a clear ownership chain: **organizations → org_members → workflows → steps/triggers → runs → step_runs**. Every data access path ultimately traces back to `org_members`, which is the trust boundary of the entire system.
+## 1. Schema Reasoning & Design
 
-### Key design decisions:
+The database schema was designed with a strict hierarchical model to ensure multi-tenant isolation and a scalable execution trace for workflows.
 
-**`org_members` as the permission anchor**: Rather than storing org context in JWTs or separate permission tables, every Hasura row-level permission uses an `_exists` sub-query that joins through `org_members`. This means the database itself enforces the boundary — a query for `workflows` won't return Org B's rows even if the caller guesses a valid UUID, because the permission filter checks `org_members` and finds no matching row.
+- **Organizations & Membership (`organizations`, `org_members`):** The foundational layer. Every user belongs to one or more organizations with a specific `role` (`owner`, `editor`, `viewer`). This enables multi-tenancy.
+- **Workflow Definitions (`workflows`, `workflow_steps`, `workflow_triggers`):** A workflow is essentially a template. It belongs to an organization, not a specific user, ensuring that organizational assets remain intact even if the creator leaves. Steps are ordered via a `step_order` integer and store flexible configuration in a `config` JSONB column to support diverse node types (`llm_call`, `http_request`, `conditional_branch`, etc.).
+- **Execution State (`workflow_runs`, `step_runs`, `workflow_results`):** When a workflow triggers, we immediately instantiate a `workflow_run` and pre-generate `step_runs` for every step in the workflow in a `pending` state. This approach ensures that:
+  1. The entire execution path is visible immediately, even before steps execute.
+  2. The frontend can subscribe to the `step_runs` table via GraphQL to render real-time progress without complex polling.
+  3. We have an immutable audit log of exactly what inputs, outputs, and errors occurred at every stage of the execution.
 
-**Denormalized `org_id` on `workflow_runs`**: Runs store `org_id` directly (not just via `workflow_id → workflows.org_id`) for two reasons: (1) permission queries on runs don't need an extra join, and (2) if a workflow is deleted, the run history is still attributable to the correct org.
+## 2. Enforcing Two Layers of Permissions
 
-**`context` JSONB on `workflow_runs`**: Steps pass data to each other via a shared context object stored on the run. This avoids tight coupling between steps and lets the executor interpolate `{{context.key}}` in any step's config. The context is also the "state" that gets serialized when a run is paused at an approval gate and deserialized when it resumes.
+A core requirement was to implement robust, two-layered security to prevent data leakage and privilege escalation.
 
-**`step_runs` created upfront**: All step_run rows are inserted as `pending` when a run starts. This means subscribers immediately see the full expected timeline — no waiting for each step to start before it appears in the UI. The subscription fires once on creation and then as each status changes.
+### Layer 1: Org + Role Scoping (Hasura RLS)
+The first layer ensures that users can only interact with data belonging to their organization. This is enforced entirely at the database level using Hasura's Row-Level Security (RLS) rules.
+- **Implementation:** Every `select`, `insert`, `update`, and `delete` operation on core tables (e.g., `workflows`) contains a Hasura permission filter. Instead of just checking `role: owner`, the filter traverses to `org_members` using an `_exists` constraint to verify that `X-Hasura-User-Id` matches a member in the same `org_id` as the workflow, *and* that the member has the required role.
+- **Result:** An editor in Org A cannot query, guess the ID of, or modify workflows in Org B. The GraphQL API will simply return `null` or an empty array, rendering cross-org ID guessing impossible.
 
-**`org_monthly_usage` view**: A PostgreSQL view rather than a computed field. It aggregates `COUNT` of runs this month and `AVG` of duration in one query, which Hasura can expose as a queryable type without application-layer processing.
+### Layer 2: Step-Level Gating & Mid-Execution Decisions
+While Layer 1 controls access to records, Layer 2 restricts the *types* of actions users can perform, especially those reaching outside the sandbox.
+- **DB-Level Restrictions:** In the Hasura metadata for `workflow_steps`, the `insert` and `update` permissions for the `editor` role explicitly exclude sensitive step types using a column constraint (`type: { _nin: ['db_write', 'notify'] }`). Webhook triggers are similarly restricted.
+- **Code-Level Enforcement (Action Handlers):** When an `approval_gate` pauses a workflow, the decision to resume it cannot be easily modeled as a database row update permission because it involves evaluating organizational context and triggering a side-effect (resuming the execution engine). Therefore, the `approveStep` Hasura Action routes to a Next.js API handler (`/api/actions/approve-step`) which explicitly verifies the caller's role (`owner` or `editor`) against the workflow's specific `org_id` before allowing the step to complete.
 
----
+## 3. The Approval-Gate Pause/Resume Mechanism
 
-## Two Permission Layers — How They're Enforced Differently
+Implementing an asynchronous pause/resume flow within a sequential execution engine required decoupling the runner from the API request.
 
-### Layer 1 — Hasura Row-Level Permissions (structural isolation)
-
-Every table has per-role `select`, `insert`, `update`, `delete` permissions configured in the Hasura metadata YAML. Each permission filter uses an `_exists` sub-query:
-
-```yaml
-# workflows SELECT for 'editor' role
-filter:
-  _exists:
-    _table: { name: org_members, schema: public }
-    _where:
-      _and:
-        - user_id: { _eq: X-Hasura-User-Id }
-        - org_id:  { _eq: $table.org_id }
-```
-
-This is enforced by Hasura at the query level — the generated SQL includes a `WHERE EXISTS (SELECT 1 FROM org_members WHERE ...)` clause. An Org B user cannot select, join, or aggregate Org A data regardless of how they construct their GraphQL query. **Even guessing a valid UUID returns 0 results**, because the WHERE clause eliminates the row.
-
-For nested tables like `workflow_steps` (no direct `org_id` column), the permission traverses the relationship:
-```yaml
-filter:
-  _exists:
-    _table: { name: org_members, schema: public }
-    _where:
-      _and:
-        - user_id: { _eq: X-Hasura-User-Id }
-        - org_id:  { _eq: $table.workflow.org_id }
-```
-
-**What Layer 1 enforces**: Who can *read or write* what rows — purely structural, org-scoped isolation.
-
-**What Layer 1 cannot enforce**: Runtime execution decisions. For example, "should this workflow run be allowed to use a `db_write` step?" is not a row-level question — it's a runtime decision based on the caller's role and the step types being used.
-
-### Layer 2 — Action Handler Code (runtime enforcement)
-
-The `triggerWorkflowRun` and `approveStep` Hasura Actions are backed by Next.js API routes. These handlers re-verify permissions in TypeScript code — not just trusting Hasura's session variables:
-
-**`trigger-workflow-run/route.ts`** performs:
-1. `verifyCanTrigger(userId, orgId)` — owner/editor can trigger, viewer cannot
-2. Quota check: `org.quota_used >= org.quota_limit`
-3. **Step-type gating**: If the workflow contains `db_write` or `notify` steps, or a `webhook` trigger, only `owner` role is allowed — not editor. This can't be a Hasura permission because it's a conditional check on the *configuration* of a related row, not a simple row-level filter.
-
-**`approve-step/route.ts`** performs:
-1. Confirms the step_run is actually `awaiting_approval` (not already approved)
-2. `verifyCanApprove(userId, orgId)` — checks `org_members` directly via admin GraphQL
-3. Verifies the approver belongs to **the same org as the workflow** (not just any org)
-4. Only then marks the step as approved and resumes the run
-
-The `verifyCanApprove` call uses the admin secret to query `org_members` directly — it cannot be spoofed by manipulating client-side headers.
-
-**Why this separation matters**: Layer 1 prevents data leakage at rest. Layer 2 controls what actions can be performed at runtime. An attacker who has editor-level access to Org A still cannot:
-- Trigger a workflow containing `db_write` steps (Layer 2 rejects it)
-- Approve a paused run if they're a viewer (Layer 2 rejects it)
-- Approve Org B's paused run even if they correctly guess the `step_run_id` (Layer 2 checks org membership)
-
----
-
-## Approval Gate Pause/Resume Implementation
-
-The `approval_gate` step type is the most architecturally interesting piece. Here's exactly how it works:
-
-### Pause (during execution)
-
-In `workflow-executor.ts`, the `executeWorkflow` function iterates through pending step_runs in order. When it reaches an `approval_gate` step:
-
-```typescript
-if (step.type === 'approval_gate') {
-  // 1. Mark the step_run as awaiting approval
-  await updateStepRun(stepRun.id, { status: 'awaiting_approval', input: context });
-  
-  // 2. Mark the workflow_run as paused (subscribers see this immediately)
-  await updateWorkflowRun(run.id, { status: 'paused', context });
-  
-  // 3. Return 'paused' — execution loop ends here
-  return 'paused';
-}
-```
-
-The `context` object (containing all previous step outputs) is persisted on the `workflow_run` row. The execution function then returns — the Node.js process moves on, holding no state in memory for this run.
-
-The GraphQL subscription on `step_runs` immediately reflects the `awaiting_approval` status, and the subscription on `workflow_runs` shows `paused`. The frontend renders the approval banner.
-
-### Resume (after approval)
-
-When an approver clicks Approve, the `approveStep` Action handler:
-
-```typescript
-// 1. Layer 2 permission check in code
-const { allowed, role } = await verifyCanApprove(userId, workflowRun.org_id);
-if (!allowed) return 403;
-
-// 2. Mark the step as completed with approval metadata
-await updateStepRun(step_run_id, {
-  status: 'completed',
-  approved_by: userId,
-  approved_at: new Date().toISOString(),
-});
-
-// 3. Resume the run
-await updateWorkflowRun(workflowRun.id, { status: 'running' });
-
-// 4. Re-call executeWorkflow from the NEXT step order
-executeWorkflow(resumedRun, steps, stepRun.step_order + 1);
-```
-
-The `executeWorkflow` call queries `step_runs` where `status = 'pending' AND step_order >= nextStepOrder`. Since the approval_gate step_run was just marked `completed`, it's excluded. The remaining pending steps pick up with the persisted context from the `workflow_run.context` field.
-
-This design means the pause/resume is **stateless from the server's perspective** — no in-memory state, no queues, no external state store. Everything is in PostgreSQL. If the server restarts between pause and resume, the resume still works correctly.
-
----
-
-## Retry and Failure Handling
-
-Each step is attempted up to 3 times with exponential backoff (1s, 2s delays between attempts). The `attempt_count` is updated live on the step_run row so subscribers can see retry progress. After 3 failures, the step_run and workflow_run are marked `failed` with the error message from the last attempt.
-
-The LLM client (`llm.ts`) also has its own 2-retry logic specifically for API-level failures (rate limits, transient errors), separate from the executor's retry logic.
-
----
-
-## Quota Enforcement
-
-Quota is incremented at the end of a successful run in `executeWorkflow`. The check happens at trigger time (before the run is created) so a quota-exceeded org never starts a run it can't complete. This is enforced in the Action handler code, not in Hasura permissions, because it requires reading `organizations.quota_used` and comparing it to `quota_limit` — a runtime decision that can't be expressed as a row-level filter.
+1. **Pausing:** When the execution engine (`executeWorkflow`) encounters an `approval_gate` step type, it immediately updates the `step_run` status to `awaiting_approval`, updates the overarching `workflow_run` status to `paused`, and **terminates the execution loop by returning**. The Node.js process does not hang or sleep; it gracefully exits, saving the exact state and `context` JSONB to the database.
+2. **Subscribing:** The React frontend, listening via a Hasura GraphQL Subscription, immediately detects the `awaiting_approval` status and renders an "Approve" button to users with `owner` or `editor` roles.
+3. **Resuming:** When an authorized user clicks Approve, the frontend triggers the `approveStep` GraphQL Mutation (backed by a custom Hasura Action). 
+4. **Rehydration:** The Action handler verifies permissions, marks the step as `completed` (recording the approver's ID and timestamp), sets the run status back to `running`, and re-invokes the `executeWorkflow` function, passing in the preserved context and instructing it to resume iteration starting from `step_order + 1`.

@@ -77,16 +77,21 @@ insert_permissions:
   - role: editor
     permission:
       check:
-        _exists:
-          _table:
-            name: org_members
-            schema: public
-          _where:
-            _and:
-              - user_id:
-                  _eq: X-Hasura-User-Id
-              - org_id:
-                  _eq: $body.workflow.org_id
+        _and:
+          - _exists:
+              _table:
+                name: org_members
+                schema: public
+              _where:
+                _and:
+                  - user_id:
+                      _eq: X-Hasura-User-Id
+                  - org_id:
+                      _eq: $body.workflow.org_id
+          - type:
+              _nin:
+                - db_write
+                - notify
       columns: "*"
 update_permissions:
   - role: owner
@@ -110,16 +115,21 @@ update_permissions:
   - role: editor
     permission:
       filter:
-        _exists:
-          _table:
-            name: org_members
-            schema: public
-          _where:
-            _and:
-              - user_id:
-                  _eq: X-Hasura-User-Id
-              - org_id:
-                  _eq: $table.workflow.org_id
+        _and:
+          - _exists:
+              _table:
+                name: org_members
+                schema: public
+              _where:
+                _and:
+                  - user_id:
+                      _eq: X-Hasura-User-Id
+                  - org_id:
+                      _eq: $table.workflow.org_id
+          - type:
+              _nin:
+                - db_write
+                - notify
       check: {}
       columns: "*"
 delete_permissions:
