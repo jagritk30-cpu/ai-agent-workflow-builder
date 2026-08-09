@@ -18,18 +18,23 @@ export default function LoginPage() {
     e.preventDefault();
     setLocalError('');
     
-    const result = await signInEmailPassword(email, password);
-    
-    if (result.isSuccess) {
-      router.push('/dashboard');
-    } else {
-      if (result.needsEmailVerification) {
-        setLocalError('Please check your inbox and verify your email address to sign in.');
-      } else if (result.error) {
-        setLocalError(result.error.message);
+    try {
+      const result = await signInEmailPassword(email, password);
+      
+      if (result.isSuccess) {
+        router.push('/dashboard');
       } else {
-        setLocalError('Login failed. Please make sure you have created an account first.');
+        if (result.needsEmailVerification) {
+          setLocalError('Please check your inbox and verify your email address to sign in.');
+        } else if (result.error) {
+          setLocalError(result.error.message);
+        } else {
+          setLocalError('Login failed. Please make sure you have created an account first.');
+        }
       }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setLocalError(err.message || 'A network error occurred. Please make sure your Nhost environment variables are set in Vercel.');
     }
   };
 
