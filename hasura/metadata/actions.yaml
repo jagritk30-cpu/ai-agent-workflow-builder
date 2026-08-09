@@ -1,0 +1,60 @@
+actions:
+  - name: triggerWorkflowRun
+    definition:
+      handler: "{{HASURA_ACTION_BASE_URL}}/api/actions/trigger-workflow-run"
+      forward_client_headers: true
+      type: mutation
+      arguments:
+        - name: workflow_id
+          type: uuid!
+      output_type: WorkflowRunResult
+      kind: synchronous
+  - name: approveStep
+    definition:
+      handler: "{{HASURA_ACTION_BASE_URL}}/api/actions/approve-step"
+      forward_client_headers: true
+      type: mutation
+      arguments:
+        - name: step_run_id
+          type: uuid!
+      output_type: ApprovalResult
+      kind: synchronous
+  - name: webhookTrigger
+    definition:
+      handler: "{{HASURA_ACTION_BASE_URL}}/api/actions/webhook-trigger"
+      forward_client_headers: false
+      type: mutation
+      arguments:
+        - name: workflow_id
+          type: uuid!
+        - name: token
+          type: String!
+        - name: payload
+          type: jsonb
+      output_type: WebhookResult
+      kind: synchronous
+custom_types:
+  enums: []
+  input_objects: []
+  objects:
+    - name: WorkflowRunResult
+      fields:
+        - name: workflow_run_id
+          type: uuid!
+        - name: status
+          type: String!
+    - name: ApprovalResult
+      fields:
+        - name: success
+          type: Boolean!
+        - name: workflow_run_id
+          type: uuid
+        - name: resumed_from_step_order
+          type: Int
+    - name: WebhookResult
+      fields:
+        - name: workflow_run_id
+          type: uuid
+        - name: status
+          type: String!
+  scalars: []
