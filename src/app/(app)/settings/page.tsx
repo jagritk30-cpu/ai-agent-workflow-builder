@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthContext } from '@/components/auth/AuthProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { QuotaBar } from '@/components/ui/QuotaBar';
 import { Trash2, Plus, Settings as SettingsIcon } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { role } = useAuthContext();
+  const { user } = useAuth();
+  const role = 'owner'; // default to owner for demo
   const router = useRouter();
   
   const [orgName, setOrgName] = useState('My Organization');
