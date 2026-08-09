@@ -76,26 +76,26 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-2" htmlFor="email">Email address</label>
+              <label className="label-text" htmlFor="email">Email address</label>
               <input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="form-input w-full"
+                className="input-field"
                 placeholder="you@company.com"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" htmlFor="password">Password</label>
+              <label className="label-text" htmlFor="password">Password</label>
               <div className="relative">
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="form-input w-full pr-10"
+                  className="input-field pr-10"
                   placeholder="••••••••"
                   required
                 />

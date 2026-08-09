@@ -17,33 +17,56 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, router]);
 
-  if (isLoading || !user) return <div style={{ padding: '2rem' }}>Loading...</div>;
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-t-2 border-b-2 border-primary rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <div style={{ width: '250px', background: 'var(--surface)', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '1.5rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--primary)' }}>Agent Builder</div>
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '1rem' }}>
-          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '8px' }} className="btn-ghost">
-            <LayoutDashboard size={18} /> Dashboard
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Sidebar */}
+      <aside className="w-64 bg-surface border-r border-border flex flex-col transition-all duration-300">
+        <div className="p-6 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_15px_rgba(108,99,255,0.4)]">
+            <Workflow className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-lg text-white tracking-tight">AgentFlow</span>
+        </div>
+        
+        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+          <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 group">
+            <LayoutDashboard size={20} className="group-hover:text-primary transition-colors" />
+            <span className="font-medium">Dashboard</span>
           </Link>
-          <Link href="/workflows" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '8px' }} className="btn-ghost">
-            <Workflow size={18} /> Workflows
+          <Link href="/workflows" className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 group">
+            <Workflow size={20} className="group-hover:text-secondary transition-colors" />
+            <span className="font-medium">Workflows</span>
           </Link>
-          <Link href="/settings" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '8px' }} className="btn-ghost">
-            <Settings size={18} /> Settings
+          <Link href="/settings" className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 group">
+            <Settings size={20} className="group-hover:text-gray-300 transition-colors" />
+            <span className="font-medium">Settings</span>
           </Link>
         </nav>
-        <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <button onClick={signOut} className="btn-ghost" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <LogOut size={18} /> Logout
+
+        <div className="p-4 border-t border-border mt-auto">
+          <button onClick={signOut} className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-gray-400 hover:text-[#ff5252] hover:bg-[#ff5252]/10 transition-all duration-200">
+            <LogOut size={20} />
+            <span className="font-medium">Logout</span>
           </button>
         </div>
-      </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
         <Navbar />
-        <main style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
-          {children}
+        <main className="flex-1 overflow-y-auto p-8 relative">
+          <div className="absolute inset-0 bg-hero-gradient opacity-30 pointer-events-none"></div>
+          <div className="max-w-7xl mx-auto relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {children}
+          </div>
         </main>
       </div>
     </div>
