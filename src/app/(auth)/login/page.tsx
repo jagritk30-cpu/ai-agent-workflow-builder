@@ -10,14 +10,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState('');
   const { signInEmailPassword, isLoading, isError, error } = useSignInEmailPassword();
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { isSuccess } = await signInEmailPassword(email, password);
-    if (isSuccess) {
+    setLocalError('');
+    
+    const result = await signInEmailPassword(email, password);
+    
+    if (result.isSuccess) {
       router.push('/dashboard');
+    } else {
+      if (result.needsEmailVerification) {
+        setLocalError('Please check your inbox and verify your email address to sign in.');
+      } else if (result.error) {
+        setLocalError(result.error.message);
+      } else {
+        setLocalError('Login failed. Please make sure you have created an account first.');
+      }
     }
   };
 
@@ -109,9 +121,9 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {isError && (
+            {(isError || localError) && (
               <div className="p-3 bg-[#ff5252]/10 border border-[#ff5252]/30 rounded-lg flex items-center gap-2 text-[#ff5252] animate-in fade-in slide-in-from-top-2">
-                <span className="text-sm">{error?.message || 'Login failed. Please check your credentials.'}</span>
+                <span className="text-sm">{localError || error?.message || 'Login failed. Please check your credentials.'}</span>
               </div>
             )}
 
