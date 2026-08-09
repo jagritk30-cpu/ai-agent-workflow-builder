@@ -1,6 +1,6 @@
 'use client';
 import { useAuth, AuthProvider } from '../../contexts/AuthContext';
-import { OrgProvider } from '../../contexts/OrgContext';
+import { OrgProvider } from '../../contexts/OrganizationContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';

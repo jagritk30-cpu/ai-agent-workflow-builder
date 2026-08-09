@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation } from '@apollo/client';
 import { useRouter } from 'next/navigation';
-import { useOrgContext } from '@/contexts/OrgContext';
+import { useOrgContext } from '@/contexts/OrganizationContext';
 import { useUserData } from '@nhost/react';
 import { CREATE_WORKFLOW } from '@/graphql/mutations';
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';

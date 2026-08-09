@@ -2,7 +2,7 @@
 
 import { useQuery } from '@apollo/client';
 import { useUserData } from '@nhost/react';
-import { useOrgContext } from '@/contexts/OrgContext';
+import { useOrgContext } from '@/contexts/OrganizationContext';
 import { GET_ORG_WORKFLOWS } from '@/graphql/queries';
 import { Activity, Clock, PlayCircle, Plus, Network } from 'lucide-react';
 import Link from 'next/link';

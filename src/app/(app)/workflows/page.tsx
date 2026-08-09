@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { useOrgContext } from '@/contexts/OrgContext';
+import { useOrgContext } from '@/contexts/OrganizationContext';
 import { GET_ORG_WORKFLOWS } from '@/graphql/queries';
 import { TRIGGER_WORKFLOW_RUN, DELETE_WORKFLOW } from '@/graphql/mutations';
 import { Plus, Search, Play, Edit2, Trash2, Network, Loader2, Workflow } from 'lucide-react';
