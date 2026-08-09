@@ -68,5 +68,9 @@ export interface StepRun {
   output?: Record<string, any>;
   error?: string;
   attempt_count: number;
+  started_at?: string;
+  completed_at?: string;
+  approved_by?: string;
+  approved_at?: string;
   workflow_run?: WorkflowRun;
 }
