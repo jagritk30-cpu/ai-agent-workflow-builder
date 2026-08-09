@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
             await incrementOrgQuota(org.id);
 
-            executeWorkflow(workflowRun.id, workflow.steps, Math.min(...workflow.steps.map(s => s.step_order)), {}, stepRuns)
+            executeWorkflow(workflowRun, workflow.steps, Math.min(...workflow.steps.map(s => s.step_order)))
               .catch(console.error);
 
             // Update trigger config
